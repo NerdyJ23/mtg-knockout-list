@@ -2,7 +2,8 @@
 <form>
     <input type="file" ref="file" @change="parseFile" id="upload" text="upload"/>
     <button type="button" @click="this.showCategories = !this.showCategories">{{this.showCategories ? "Hide categories" : "Show Categories"}}</button>
-
+    <input type="checkbox" id="hideCollected" @click="this.hideCollected = !this.hideCollected" />
+    <label for="hideCollected">Hide collected</label>
     <div v-if="showCategories" class="container">
         <div class="row">
             <div v-for="cat in types" class="col-md-4">
@@ -27,10 +28,15 @@
         </div>
     </div>
 
-    <div class="container" id="setCardList">
+    <div class="card-deck" id="setCardList">
         <div class="row" style="">
-            <div v-for="card in cardsInSet" class="col-md-2" :style="isCollected(card) ? 'text-decoration : line-through; color: green; opacity: 0.5' : 'color:red' ">{{card.name}}
-                <img class="img-thumbnail" :src="card.image" />
+            <div v-show="this.hideCollected || (this.hideCollected == isCollected(card)) " v-for="card in cardsInSet" class="col-md-2 cardListItem" :style="isCollected(card) ? 'text-decoration : line-through; color: green; opacity: 0.5' : 'color:red' ">
+                <div  class="card h-100">
+                    <img class="card-img-top img-thumbnail" :src="card.image" />
+                    <div class="card-body">
+                        <p class="card-body">{{card.name}}</p>
+                    </div>
+                </div>
 
             </div>
         </div>
@@ -112,6 +118,8 @@ export default {
 
             cardsInSet: [],
             setSelected: null,
+
+            hideCollected: false
         }
     },
     methods:
@@ -176,6 +184,8 @@ export default {
 
             }
             //console.log(tempList);
+
+
             this.filteredSetList = tempList;
         },
         filterCardsOwnedBySet()
@@ -192,6 +202,7 @@ export default {
                 }
             }
             //console.log(tempList);
+
             this.filteredCardsOwned = tempList;
         },
         showCards()
@@ -205,7 +216,54 @@ export default {
                     tempCardList.push(defaultCards[card]);
             }
             //console.log(defaultCards);
+            tempCardList.sort(function (a,b) 
+            {
+                if(a.name > b.name)
+                return 1;
 
+                if(a.name < b.name)
+                return -1;
+
+                return 0;
+            });
+
+            //loop through and remove duplicate cards aside from double faced cards, denoted with //
+            console.log("card list length: " + tempCardList.length);
+            let dupePositions = [];
+            for(let card in tempCardList)
+            {
+                console.log(`checking for dupes of ${tempCardList[card].name}`);
+                for(let compare in tempCardList)
+                {
+                    //console.log(`comparing ${tempCardList[card].name} to ${tempCardList[compare].name}`);
+                    if(tempCardList.indexOf(tempCardList[card]) == tempCardList.indexOf(tempCardList[compare]))
+                    {
+                        console.log("preventing self removal");
+                    }
+                    else if (tempCardList[compare].name.includes("//"))
+                    {
+                        if((tempCardList[compare].name == tempCardList[card].name) && (tempCardList[compare-2].name == tempCardList[card].name))
+                        {
+                            //dupePositions.push(tempCardList.indexOf(tempCardList[compare]))
+                            console.log(`${tempCardList[compare].name} is same as ${tempCardList[compare-2].name}`)
+                        }
+
+                    }
+                    else if((tempCardList[card].name == tempCardList[compare].name))
+                    {
+                        //console.log(`removing ${tempCardList[compare].name} from position ${tempCardList.indexOf(tempCardList[compare])}`);
+                        dupePositions.push(tempCardList.indexOf(tempCardList[compare]));
+                        
+                        //tempCardList.splice(tempCardList.indexOf(tempCardList[compare],1));
+                        break;
+                    }
+                }
+            }
+
+            for(let i = dupePositions.length -1; i > 0; i--)
+            {
+                tempCardList.splice(dupePositions[i],1);
+            }
             this.cardsInSet = tempCardList;
             this.filterCardsOwnedBySet();
             console.log(this.cardsInSet);
@@ -218,17 +276,40 @@ export default {
             for(let card in defaultCards)
             {
                 let tempCard = defaultCards[card];
-                //console.log(tempCard.name);
-
-                let image = typeof tempCard.image_uris == 'undefined' ? 'default.jpg' : tempCard.image_uris.normal;
-                let temp = {
+                console.log(tempCard.name);
+                console.log(tempCard.layout);
+                if(tempCard.layout == "transform" || tempCard.layout == "modal_dfc" || tempCard.layout == "double_faced_token" || tempCard.layout == "reversible_card")
+                {
+                    //console.log(tempCard);
+                    for(let face in tempCard.card_faces)
+                    {
+                        console.log(tempCard.card_faces);
+                        let temp = {
+                        collector_number: tempCard.collector_number,
+                        name: tempCard.name,
+                        set: tempCard.set,
+                        set_name: tempCard.set_name,
+                        image: tempCard.card_faces[face].image_uris.normal,
+                        rarity: tempCard.rarity,
+                        };
+                        cardList.push(temp);
+                    }
+                }
+                else if(tempCard.layout != "art_series")
+                {
+                    //console.log(tempCard);
+                    let temp = {
                     collector_number: tempCard.collector_number,
                     name: tempCard.name,
                     set: tempCard.set,
                     set_name: tempCard.set_name,
-                    image: image
-                };
-                cardList.push(temp);
+                    image: tempCard.image_uris.normal,
+                    rarity: tempCard.rarity,
+                    };
+
+                    cardList.push(temp);
+                }
+                //let image = typeof tempCard.image_uris == 'undefined' ? 'default.jpg' : tempCard.image_uris.normal;
             }
 
             let jsonCardList = JSON.stringify(cardList);
@@ -262,5 +343,8 @@ export default {
 </script>
 
 <style>
-
+.cardListItem
+{
+    margin-bottom:10px;
+}
 </style>
