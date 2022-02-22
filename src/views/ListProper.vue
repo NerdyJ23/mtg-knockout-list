@@ -29,9 +29,14 @@
 
     <div class="container" id="setCardList">
         <div class="row" style="">
-            <div v-for="card in cardsInSet" class="col-md-6" :style="isCollected(card) ? 'text-decoration : line-through; color: green' : 'color:red' ">{{card.name}}</div>
+            <div v-for="card in cardsInSet" class="col-md-2" :style="isCollected(card) ? 'text-decoration : line-through; color: green; opacity: 0.5' : 'color:red' ">{{card.name}}
+                <img class="img-thumbnail" :src="card.image" />
+
+            </div>
         </div>
     </div>
+
+    <button type="button" @click="minifyCards">!!!</button>
 </template>
 
 <script>
@@ -207,16 +212,21 @@ export default {
         },
         minifyCards()
         {
+            console.log("working");
             let cardList = [];
 
             for(let card in defaultCards)
             {
                 let tempCard = defaultCards[card];
+                //console.log(tempCard.name);
+
+                let image = typeof tempCard.image_uris == 'undefined' ? 'default.jpg' : tempCard.image_uris.normal;
                 let temp = {
                     collector_number: tempCard.collector_number,
                     name: tempCard.name,
                     set: tempCard.set,
-                    set_name: tempCard.set_name
+                    set_name: tempCard.set_name,
+                    image: image
                 };
                 cardList.push(temp);
             }
@@ -229,7 +239,7 @@ export default {
         isCollected(card)
         {
             //console.log(card);
-            console.log(`looking for ${card.name}`);
+            //console.log(`looking for ${card.name}`);
             for(let c in this.filteredCardsOwned)
             {
                 //console.log(`current card: ${this.filteredCardsOwned[c].name}`);
@@ -238,7 +248,7 @@ export default {
                     //console.log(`looking for card ${this.cardsInSet[c].name} among ${this.cardsOwned[cardOwned].name}`);
                     if (this.filteredCardsOwned[c].name == card.name)
                     {
-                        console.log(`${this.cardsInSet[c].name} is collected!`);
+                        //console.log(`${this.cardsInSet[c].name} is collected!`);
                         return true;
                     }
                 //}
