@@ -13,22 +13,31 @@
     </div>
 
     <div class="container">
-        <select id="setSelected">
-            <option v-for="set in filteredSetList" :value="set.code"> {{set.name}} </option>
+        <select id="setSelected" v-model="setSelected">
+            <option v-for="set in filteredSetList" :value="set.name"> {{set.name}} </option>
         </select>
+        <button id="showCards" type="button" @click="showCards">Show cards</button>
     </div>
 
 </form>
-<p>Selected: {{categoriesSelected}} </p>
+<p>Selected: {{categoriesSelected}} Set: {{setSelected}} </p>
     <div class="container" id="card-list">
-        <div class="row"> 
-            <div v-for="item in cardsOwned" class="col-md-4">{{item.count}}x  {{item.name}}</div>
+        <div class="row" style="display:none"> 
+            <div v-for="item in filteredCardsOwned" class="col-md-4">{{item.count}}x  {{item.name}}</div>
+        </div>
+    </div>
+
+    <div class="container" id="setCardList">
+        <div class="row" style="">
+            <div v-for="card in cardsInSet" class="col-md-6" :style="isCollected(card) ? 'text-decoration : line-through; color: green' : 'color:red' ">{{card.name}}</div>
         </div>
     </div>
 </template>
 
 <script>
 import sets from "../data/sets.json"
+import defaultCards from "../data/default-cards-min.json"
+import Papa from 'papaparse';
 export default {
     created() {
         const setList = sets.sets;
@@ -85,7 +94,9 @@ export default {
     },
     data() {
         return {
-            cardsOwned : "", //unknown until user uploads their CSV string from deckbox
+            cardsOwned : [], //unknown until user uploads their CSV string from deckbox
+            filteredCardsOwned: [],
+
             setList : null, //set List
             filteredSetList: null,
 
@@ -93,6 +104,9 @@ export default {
             types: [], //this is really categories, shit
             categoriesSelected: [],
             showCategories: false,
+
+            cardsInSet: [],
+            setSelected: null,
         }
     },
     methods:
@@ -120,7 +134,7 @@ export default {
                         let card = parsed.data[i];
                         //console.log(parsed.data[i]);
                         //console.log(card);
-                        let temp = {name: card.Name,number : card['Card Number'], count: card.Count};
+                        let temp = {name: card.Name,number : card['Card Number'], count: card.Count, set: card.Edition};
                         if(card.Count > 0)
                             tempList.push(temp);
                     }
@@ -158,7 +172,81 @@ export default {
             }
             //console.log(tempList);
             this.filteredSetList = tempList;
+        },
+        filterCardsOwnedBySet()
+        {
+            let tempList = [];
+
+            for(let card in this.cardsOwned)
+            {
+                //console.log(`card: ${this.cardsOwned[card].set} is in ${this.setSelected}?`);
+                if(this.cardsOwned[card].set == this.setSelected)
+                {
+                    tempList.push(this.cardsOwned[card]);
+                    //console.log("hell yeah it is!");
+                }
+            }
+            //console.log(tempList);
+            this.filteredCardsOwned = tempList;
+        },
+        showCards()
+        {
+            let tempCardList = [];
+
+            for(let card in defaultCards)
+            {
+                //console.log(defaultCards[card]);    
+                if(defaultCards[card].set_name == this.setSelected)
+                    tempCardList.push(defaultCards[card]);
+            }
+            //console.log(defaultCards);
+
+            this.cardsInSet = tempCardList;
+            this.filterCardsOwnedBySet();
+            console.log(this.cardsInSet);
+        },
+        minifyCards()
+        {
+            let cardList = [];
+
+            for(let card in defaultCards)
+            {
+                let tempCard = defaultCards[card];
+                let temp = {
+                    collector_number: tempCard.collector_number,
+                    name: tempCard.name,
+                    set: tempCard.set,
+                    set_name: tempCard.set_name
+                };
+                cardList.push(temp);
+            }
+
+            let jsonCardList = JSON.stringify(cardList);
+            console.log(jsonCardList);
+            //const fs = require('fs');
+            //fs.writeFile("minifiedCards.json", jsonCardList,"utf-8");
+        },
+        isCollected(card)
+        {
+            //console.log(card);
+            console.log(`looking for ${card.name}`);
+            for(let c in this.filteredCardsOwned)
+            {
+                //console.log(`current card: ${this.filteredCardsOwned[c].name}`);
+                //for(let cardOwned in this.filteredCardsOwned)
+                //{
+                    //console.log(`looking for card ${this.cardsInSet[c].name} among ${this.cardsOwned[cardOwned].name}`);
+                    if (this.filteredCardsOwned[c].name == card.name)
+                    {
+                        console.log(`${this.cardsInSet[c].name} is collected!`);
+                        return true;
+                    }
+                //}
+            }
+            return false;
         }
+    },
+    computed: {
     }
 }
 </script>
