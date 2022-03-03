@@ -15,9 +15,9 @@
 
     <div class="container">
         <select id="setSelected" v-model="setSelected">
-            <option v-for="set in filteredSetList" :value="set.name"> {{set.name}} </option>
+            <option v-for="set in filteredSetList" :value="set.code"> {{set.name}} </option>
         </select>
-        <button id="showCards" type="button" @click="showCards">Show cards</button>
+        <button id="showCards" type="button" @click="loadCards">Show cards</button>
     </div>
 
 </form>
@@ -32,7 +32,7 @@
         <div class="row" style="">
             <div v-show="this.hideCollected || (this.hideCollected == isCollected(card)) " v-for="card in cardsInSet" class="col-md-2 cardListItem" :style="isCollected(card) ? 'text-decoration : line-through; color: green; opacity: 0.5' : 'color:red' ">
                 <div  class="card h-100">
-                    <img class="card-img-top img-thumbnail" :src="card.image" />
+                    <img class="card-img-top img-thumbnail" :src="getCardImage(card)" />
                     <div class="card-body">
                         <p class="card-body">{{card.name}}</p>
                     </div>
@@ -46,62 +46,63 @@
 </template>
 
 <script>
-import sets from "../data/sets.json"
-import defaultCards from "../data/default-cards-min.json"
+//import sets from "../data/sets.json"
+//import defaultCards from "../data/default-cards-min.json"
 import Papa from 'papaparse';
+import mtgDAO from '../DAO/mtgDAO';
+import SNC from "../data/NEO.json"
+
 export default {
     created() {
-        const setList = sets.sets;
+        /*fetch('api.scryfall.com/sets')
+        .then(response => response.blob())
+        .then(data => {
+            console.log(data);
+            const reader = new FileReader();
+            reader.addEventListener('loadend', () => {
+            // reader.result contains the contents of blob as a typed array
+                        console.log(reader.result);
+            });
+            reader.readAsArrayBuffer(data);
+            console.log(reader.result);
+                });*/
         
-        setList.sort(function (a,b)
-        {
-            let dateA = new Date(a.releaseDate);
-            //console.log(dateA);
-            let dateB = new Date(b.releaseDate);
-            //console.log(dateB);
-            //console.log(`is a > b? ${dateA > dateB}\n`);
-            return dateB.getTime() -  dateA.getTime();
-        });
 
-        console.log(setList);
-        for(let i = 0; i < setList.length; i++)
+        //check if old set
+
+        if(JSON.parse(window.localStorage.getItem("setList")) != null) //uh oh, date parsing
         {
-            //console.log(this.types.indexOf(setList[i].type));
-            let exists = false;
-            if(setList[i].onlineOnly || setList[i].type == "funny" || setList[i].type == "memorabilia")
+            console.log(JSON.parse(window.localStorage.getItem("setList")).meta);
+            let today = new Date();
+            let cached = new Date(JSON.parse(window.localStorage.getItem("setList")).meta.date);
+            console.log(today);
+            let diff = (today.getTime() - cached.getTime()) / (1000 * 3600 * 24);
+            if(diff < 1)
             {
-                setList.splice(i,1);
+                fetch('https://mtgjson.com/api/v5/SetList.json')
+                .then(response => response.json())
+                .then(data => {
+                    console.log("downloading new set list");
+                    console.log(data);
+                    window.localStorage.setItem("setList",JSON.stringify(data));
+                    this.initSetup();
+                })
             }
             else
-            {
-                for(let item in this.types)
-                {
-                    //console.log(`item type is ${this.types[item].category}, list type is ${setList[i].type}`);
-                    if(this.types[item].category == setList[i].type)
-                        exists = true;
-                }
-    
-                if(!exists)
-                {
-                    let t = this.types;
-                    let tempObj = {id: this.types.length,category:setList[i].type}
-                    t.push(tempObj);
-                    //console.log(t);
-                    this.types = t;
-                }
-            }
-
+                this.initSetup();
+            console.log(diff);
         }
-        console.log(setList);
-        this.setList = setList;
-        this.filteredSetList = setList;
+        else {
 
-        let defaultCategories = [];
-        defaultCategories.push('core');
-        defaultCategories.push('expansion');
-
-        this.categoriesSelected = defaultCategories;
-        this.filterSetsByCategory();
+            fetch('https://mtgjson.com/api/v5/SetList.json')
+            .then(response => response.json())
+            .then(data => {
+                console.log("no setlist cached, downloading...");
+                console.log(data);
+                window.localStorage.setItem("setList",JSON.stringify(data));
+                this.initSetup();
+            })
+        }
     },
     data() {
         return {
@@ -124,6 +125,62 @@ export default {
     },
     methods:
     {
+        initSetup()
+        {
+            //const setList = sets.sets;
+            const setList = JSON.parse(window.localStorage.getItem("setList")).data;
+            
+            //console.log(setList);
+            setList.sort(function (a,b) //sort set list by most recently released
+            {
+                let dateA = new Date(a.releaseDate);
+                //console.log(dateA);
+                let dateB = new Date(b.releaseDate);
+                //console.log(dateB);
+                //console.log(`is a > b? ${dateA > dateB}\n`);
+                return dateB.getTime() -  dateA.getTime();
+            });
+
+            //console.log(setList);
+            for(let i = 0; i < setList.length; i++) //filter out cards that arent actually playable cards
+            {
+                //console.log(this.types.indexOf(setList[i].type));
+                let exists = false;
+                if(setList[i].onlineOnly || setList[i].type == "memorabilia")
+                {
+                    setList.splice(i,1);
+                }
+                else
+                {
+                    for(let item in this.types)
+                    {
+                        //console.log(`item type is ${this.types[item].category}, list type is ${setList[i].type}`);
+                        if(this.types[item].category == setList[i].type)
+                            exists = true;
+                    }
+        
+                    if(!exists)
+                    {
+                        let t = this.types;
+                        let tempObj = {id: this.types.length,category:setList[i].type}
+                        t.push(tempObj);
+                        //console.log(t);
+                        this.types = t;
+                    }
+                }
+
+            }
+            //console.log(setList);
+            this.setList = setList;
+            this.filteredSetList = setList;
+
+            let defaultCategories = []; //set up the default checked categories for items
+            defaultCategories.push('core');
+            defaultCategories.push('expansion');
+
+            this.categoriesSelected = defaultCategories;
+            this.filterSetsByCategory();
+        },
         parseFile(file)
         {
             let list = file.target.files;
@@ -158,7 +215,7 @@ export default {
             }
         },
 
-        toggleShowCategories()
+        toggleShowCategories() //@TODO: turn into just the inline function
         {
             this.showCategories = !this.showCategories;
         },
@@ -187,6 +244,7 @@ export default {
 
 
             this.filteredSetList = tempList;
+            this.setSelected = tempList[0].code;//selectes the most recent set by default
         },
         filterCardsOwnedBySet()
         {
@@ -205,16 +263,113 @@ export default {
 
             this.filteredCardsOwned = tempList;
         },
+        getCachedSet()
+        {
+            let sets = window.localStorage.getItem("cachedSets");
+
+            if(sets === null)
+                console.log("no sets cached");
+
+            else //find the set name in the sets list
+            {
+                let parsedSets = JSON.parse(sets);
+                //console.log(temp);
+                //console.log(temp);
+                //let parsedSets = JSON.parse(temp.cachedSets);
+                //console.log(parsedSets);
+
+                for(let set in parsedSets)
+                {
+                    const parsedSet = this.unstringifySet(parsedSets[set])
+                    if(parsedSet.data.code == this.setSelected)
+                        return parsedSet;
+                    //console.log(parsedSet);
+                }
+            }
+            return null;
+        },
+        stringifySet(set)
+        {
+            set.cards = JSON.stringify(set.cards);
+            set.tokens = JSON.stringify(set.tokens);
+            set = JSON.stringify(set);
+            let cachedList = {
+                cachedSets: [set]
+            }
+
+            cachedList.cachedSets = JSON.stringify(cachedList.cachedSets);
+            return cachedList;
+        },
+        unstringifySet(set)
+        {
+            set = JSON.parse(set.cachedSets);
+            set = JSON.parse(set);
+
+            //console.log(set);
+            //set.data.cards = JSON.parse(set.cards);
+            //set.data.tokens = JSON.parse(set.tokens);
+
+            //cachedList.cachedSets = JSON.stringify(cachedList.cachedSets);
+            return set;
+        },
+        getCardImage(card)
+        {
+            //console.log(card);
+            let id = card.identifiers.scryfallId;
+            return `https://c1.scryfall.com/file/scryfall-cards/normal/front/${id[0]}/${id[1]}/${id}.jpg`
+            console.log(id);
+            /*for(let item in card)
+            {
+                console.log(card.identifiers);
+            }*/
+            //console.log(card);
+        },
+        loadCards()
+        {
+            
+            //const item = this.stringifySet(SNC);
+            
+            /*console.log("BEFORE STRINGIFY");
+            console.log(item);
+
+            console.log("AFTER STRINGIFY");
+            console.log(JSON.stringify(item));*/
+            //window.localStorage.setItem("cachedSets", JSON.stringify(item));
+
+           // console.log(window.localStorage.getItem("cachedSets"));
+            console.log(this.setSelected)
+            console.log(this.getCachedSet());
+
+            if(this.getCachedSet() === null)//download set information if needed
+            {
+                //https://mtgjson.com/api/v5/SNC.json
+                fetch(`https://mtgjson.com/api/v5/${this.setSelected}.json`)
+                .then(response => response.json())
+                .then(data => {
+                    console.log("set not cached, downloading...");
+                    console.log(data);
+                    let setitem = this.stringifySet(data);
+                    window.localStorage.setItem("cachedSets",JSON.stringify([setitem]));
+                    this.showCards();
+                })
+            }
+            else
+            {
+                this.showCards();
+            }
+        },
         showCards()
         {
-            let tempCardList = [];
+            let tempCardList = (this.getCachedSet()).data.cards;
+            /*let tempCardList = [];
 
             for(let card in defaultCards)
             {
                 //console.log(defaultCards[card]);    
                 if(defaultCards[card].set_name == this.setSelected)
                     tempCardList.push(defaultCards[card]);
-            }
+            }*/
+            tempCardList = 
             //console.log(defaultCards);
             tempCardList.sort(function (a,b) 
             {
@@ -229,16 +384,16 @@ export default {
 
             //loop through and remove duplicate cards aside from double faced cards, denoted with //
             console.log("card list length: " + tempCardList.length);
-            let dupePositions = [];
+            /*let dupePositions = [];
             for(let card in tempCardList)
             {
-                console.log(`checking for dupes of ${tempCardList[card].name}`);
+                //console.log(`checking for dupes of ${tempCardList[card].name}`);
                 for(let compare in tempCardList)
                 {
                     //console.log(`comparing ${tempCardList[card].name} to ${tempCardList[compare].name}`);
                     if(tempCardList.indexOf(tempCardList[card]) == tempCardList.indexOf(tempCardList[compare]))
                     {
-                        console.log("preventing self removal");
+                        //console.log("preventing self removal");
                     }
                     else if (tempCardList[compare].name.includes("//"))
                     {
@@ -263,12 +418,12 @@ export default {
             for(let i = dupePositions.length -1; i > 0; i--)
             {
                 tempCardList.splice(dupePositions[i],1);
-            }
+            }*/
             this.cardsInSet = tempCardList;
             this.filterCardsOwnedBySet();
-            console.log(this.cardsInSet);
+            //console.log(this.cardsInSet);
         },
-        minifyCards()
+        minifyCards() //will not need when moving to embedded db (knock on wood)
         {
             console.log("working");
             let cardList = [];
